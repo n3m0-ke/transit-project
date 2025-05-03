@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Matatu Stops Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <!-- PapaParse for CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <script>
+    // Initialize Leaflet map centered on Nairobi
+    const map = L.map('map').setView([-1.286389, 36.817223], 12);
+
+    // Add OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(map);
+
+    // Load and parse stops.csv
+    Papa.parse("stops.txt", {
+      download: true,
+      header: true,
+      complete: function(results) {
+        results.data.forEach(stop => {
+          if (stop.stop_lat && stop.stop_lon) {
+            const lat = parseFloat(stop.stop_lat);
+            const lon = parseFloat(stop.stop_lon);
+            const name = stop.stop_name;
+
+            if (!isNaN(lat) && !isNaN(lon)) {
+              L.marker([lat, lon])
+                .addTo(map)
+                .bindPopup(`<strong>${name}</strong><br>Stop ID: ${stop.stop_id}`);
+            }
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>
