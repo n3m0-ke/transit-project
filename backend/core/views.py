@@ -6,6 +6,7 @@ from core.utils.gtfs_utils import (
     find_nearest_stops,
     search_routes_by_name,
     get_next_trips,
+    find_trip_plan_with_transfers,
     calculate_path,
     get_stop_coordinates,
     get_routes_by_stop,
@@ -44,9 +45,17 @@ def next_trips_view(request):
 def calculate_path_view(request):
     """API to compute the best transit path from A to B."""
     if request.method == "GET":
-        start_stop = request.GET.get("start_stop")
-        end_stop = request.GET.get("end_stop")
-        path = calculate_path(gtfs_data, start_stop, end_stop)
+        start_stop = request.GET.get('start_stop')
+        end_stop = request.GET.get('end_stop')
+        time = request.GET.get('time', "08:00:00")  # Optional
+
+        if not start_stop or not end_stop:
+            return JsonResponse({"error": "Missing start_stop or end_stop"}, status=400)
+
+        path = find_trip_plan_with_transfers(start_stop, end_stop, current_time_str=time)
+        if not path:
+            return JsonResponse({"message": "No path found"}, status=404)
+
         return JsonResponse({"path": path})
 
 @csrf_exempt

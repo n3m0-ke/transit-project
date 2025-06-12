@@ -8,6 +8,7 @@ from shapely.geometry import Point
 from rtree import index as rtree_index
 from dotenv import load_dotenv
 import redis
+from collections import defaultdict, deque
 
 
 # Setup logging
@@ -232,6 +233,65 @@ def get_departure_board(gtfs_data, stop_id, time_window=30):
         if st["stop_id"] == stop_id and now.strftime("%H:%M:%S") <= st["departure_time"] <= end_time
     ]
     return sorted(departures, key=lambda x: x["departure_time"])[:10]
+
+def find_trip_plan_with_transfers(start_stop_id, end_stop_id, current_time_str="08:00:00"):
+    # Convert time
+    try:
+        current_time = datetime.strptime(current_time_str, "%H:%M:%S").time()
+    except:
+        current_time = datetime.strptime("08:00:00", "%H:%M:%S").time()
+
+    # Preprocess stop_times into a graph of connections
+    stop_departures = defaultdict(list)
+    stop_arrivals = defaultdict(list)
+
+    for _, row in gtfs_data['stop_times'].iterrows():
+        stop_id = row['stop_id']
+        trip_id = row['trip_id']
+        arrival = datetime.strptime(row['arrival_time'], "%H:%M:%S").time()
+        departure = datetime.strptime(row['departure_time'], "%H:%M:%S").time()
+        stop_seq = row['stop_sequence']
+        stop_departures[stop_id].append((trip_id, stop_seq, departure))
+        stop_arrivals[trip_id].append((stop_id, stop_seq, arrival))
+
+    # Build a BFS queue: (current_stop, current_time, path_so_far)
+    queue = deque()
+    visited = set()
+    queue.append((start_stop_id, current_time, []))
+
+    while queue:
+        current_stop, current_time, path = queue.popleft()
+        if (current_stop, current_time) in visited:
+            continue
+        visited.add((current_stop, current_time))
+
+        # Look for all trips departing from current stop
+        for trip_id, stop_seq, departure_time in stop_departures.get(current_stop, []):
+            # Only consider trips departing AFTER the current time + transfer buffer
+            if departure_time < (datetime.combine(datetime.today(), current_time) + timedelta(minutes=MIN_TRANSFER_MINUTES)).time():
+                continue
+
+            # Get full trip stops for this trip
+            trip_stops = sorted(stop_arrivals[trip_id], key=lambda x: x[1])
+            for i, (stop_id, seq, arrival_time) in enumerate(trip_stops):
+                if stop_id == current_stop:
+                    # Start from this stop and look ahead
+                    for j in range(i + 1, len(trip_stops)):
+                        next_stop_id, _, next_arrival_time = trip_stops[j]
+                        new_path = path + [{
+                            "trip_id": trip_id,
+                            "from_stop": current_stop,
+                            "to_stop": next_stop_id,
+                            "departure_time": departure_time.strftime("%H:%M:%S"),
+                            "arrival_time": next_arrival_time.strftime("%H:%M:%S")
+                        }]
+
+                        if next_stop_id == end_stop_id:
+                            return new_path  # Found a valid route
+                        
+                        queue.append((next_stop_id, next_arrival_time, new_path))
+
+    return []  # No path found
 
 
 # --- Initialization ---
