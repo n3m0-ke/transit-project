@@ -1,51 +1,46 @@
 import os
-from django.conf import settings
 import json
 import logging
+from datetime import datetime, timedelta
+from collections import defaultdict, deque
+
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 from rtree import index as rtree_index
 from dotenv import load_dotenv
 import redis
-from collections import defaultdict, deque
+from django.conf import settings
 
-
-# Setup logging
+# --- Configuration ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+load_dotenv()
 
-# Constants
-BASE_DIR = settings.BASE_DIR  # Gets the absolute base directory
-GTFS_DIR = os.path.join(BASE_DIR, "data", "gtfs")  # Constructs a system-friendly GTFS path
-
+BASE_DIR = settings.BASE_DIR
+GTFS_DIR = os.path.join(BASE_DIR, "data", "gtfs")
 FILES = ["stops", "routes", "trips", "stop_times"]
-
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_DB = int(os.getenv("REDIS_DB", 0))
 
-# --- Redis Setup & Utilities ---
-
-load_dotenv()
-
+# --- Redis Setup ---
 def get_redis_client():
-    """Attempts to connect to Redis Cloud."""
     try:
         client = redis.StrictRedis(
             host=os.getenv("REDIS_HOST"),
-            port=int(os.getenv("REDIS_PORT")),
+            port=REDIS_PORT,
             username=os.getenv("REDIS_USERNAME"),
             password=os.getenv("REDIS_PASSWORD"),
-            db=int(os.getenv("REDIS_DB")),
+            db=REDIS_DB,
             decode_responses=True
         )
-        client.ping()  # Test connection
+        client.ping()
         return client
     except redis.ConnectionError:
-        return None  # Handle offline mode gracefully
-
+        logger.warning("Redis unavailable, caching disabled.")
+        return None
 
 redis_client = get_redis_client()
 
@@ -65,13 +60,12 @@ def load_from_redis(key):
                 logger.info(f"Loaded {key} from Redis.")
                 return json.loads(cached)
         except Exception as e:
-            logger.error(f"Error reading {key} from Redis: {e}")
+            logger.error(f"Redis read error for {key}: {e}")
     return None
 
-# --- GTFS Data ---
-
+# --- GTFS Data Load ---
 def load_gtfs_data():
-    """Loads GTFS data from Redis cache or from CSV files, ensuring files exist."""
+    """Load GTFS data from cache or local CSV files."""
     cached_data = load_from_redis("gtfs_data")
     if cached_data:
         return cached_data
@@ -80,47 +74,42 @@ def load_gtfs_data():
     gtfs_data = {}
 
     for file in FILES:
-        path = os.path.join(GTFS_DIR, f"{file}.txt")  # ✅ OS-friendly path handling
-
-        # Explicitly check if file exists before loading
+        path = os.path.join(GTFS_DIR, f"{file}.txt")
         if not os.path.exists(path):
-            logger.error(f"GTFS file not found: {path}")
             raise FileNotFoundError(f"Missing GTFS file: {path}")
-
         df = pd.read_csv(path)
         gtfs_data[file] = df.to_dict(orient="records")
 
     cache_to_redis("gtfs_data", gtfs_data)
     return gtfs_data
 
-# --- Geo & Spatial Indexing ---
-
+# --- Geo and Spatial Index ---
 def get_stops_gdf(gtfs_data):
-    """Returns a GeoDataFrame of stops with geometry."""
+    """Convert stops into a GeoDataFrame."""
     stops_df = pd.DataFrame(gtfs_data["stops"])
-    stops_df["geometry"] = stops_df.apply(lambda row: Point(float(row["stop_lon"]), float(row["stop_lat"])), axis=1)
+    stops_df["geometry"] = stops_df.apply(
+        lambda row: Point(float(row["stop_lon"]), float(row["stop_lat"])), axis=1
+    )
     return gpd.GeoDataFrame(stops_df, geometry="geometry", crs="EPSG:4326")
 
 def build_spatial_index(stops_gdf):
-    """Builds an R-tree spatial index."""
+    """Build an R-tree index for spatial search."""
     idx = rtree_index.Index()
     for i, row in stops_gdf.iterrows():
         idx.insert(i, row.geometry.bounds)
     return idx
 
-# --- Nearest Stops ---
-
 def find_nearest_stops(user_location, stops_gdf, spatial_idx, radius_km=1.0):
-    """Finds stops within a given radius of user_location (lat, lon)."""
+    """Find nearby stops within a radius (km) of a lat/lon point."""
     lat, lon = user_location
     cache_key = f"nearest_stops:{lat:.5f}_{lon:.5f}_{radius_km:.1f}"
-    
+
     cached_result = load_from_redis(cache_key)
     if cached_result:
         return cached_result
 
     user_point = Point(lon, lat)
-    buffer_radius_deg = radius_km / 111  # Approximate deg/km
+    buffer_radius_deg = radius_km / 111  # Rough conversion
     bounds = user_point.buffer(buffer_radius_deg).bounds
     matches = list(spatial_idx.intersection(bounds))
 
@@ -131,82 +120,31 @@ def find_nearest_stops(user_location, stops_gdf, spatial_idx, radius_km=1.0):
     cache_to_redis(cache_key, result)
     return result
 
-# --- Trip + Route Utilities ---
-
+# --- Trip & Route Utilities ---
 def get_route_trips(gtfs_data, route_id):
-    """Fetches trips associated with a given route."""
     return [trip for trip in gtfs_data["trips"] if trip["route_id"] == route_id]
 
 def get_trip_stop_times(gtfs_data, trip_id):
-    """Fetches stop times for a given trip."""
     stop_times = [st for st in gtfs_data["stop_times"] if st["trip_id"] == trip_id]
     return sorted(stop_times, key=lambda x: int(x["stop_sequence"]))
 
 def search_routes_by_name(gtfs_data, route_name):
-    """Finds routes matching the given name or ID."""
     routes = pd.DataFrame(gtfs_data["routes"])
-    matched_routes = routes[routes["route_long_name"].str.contains(route_name, case=False, na=False)]
-    return matched_routes[["route_id", "route_long_name", "route_type"]].to_dict(orient="records")
-
-from datetime import datetime, timedelta
+    matched = routes[routes["route_long_name"].str.contains(route_name, case=False, na=False)]
+    return matched[["route_id", "route_long_name", "route_type"]].to_dict(orient="records")
 
 def get_next_trips(gtfs_data, stop_id, time_window=30):
-    """Find upcoming trips from a given stop ID within a time window (minutes)."""
+    """Get the next 5 trips departing from a stop."""
     now = datetime.now().strftime("%H:%M:%S")
-
-    relevant_stop_times = [
+    candidates = [
         st for st in gtfs_data["stop_times"]
-        if st["stop_id"] == stop_id and st.get("departure_time")
+        if st["stop_id"] == stop_id and st.get("departure_time") > now
     ]
-    upcoming = []
-    for st in relevant_stop_times:
-        dep_time = st["departure_time"]
-        if dep_time > now:
-            upcoming.append(st)
-    upcoming = sorted(upcoming, key=lambda x: x["departure_time"])
+    upcoming = sorted(candidates, key=lambda x: x["departure_time"])
     return upcoming[:5]
 
-def calculate_path(gtfs_data, start_stop_id, end_stop_id):
-    """A mock placeholder to compute a simple path (can be upgraded with graphs later)."""
-    # For now, return a direct connection if both stops are in the same trip
-    trips_with_start = {
-        st["trip_id"] for st in gtfs_data["stop_times"] if st["stop_id"] == start_stop_id
-    }
-    trips_with_end = {
-        st["trip_id"] for st in gtfs_data["stop_times"] if st["stop_id"] == end_stop_id
-    }
-    common_trips = trips_with_start.intersection(trips_with_end)
-
-    if common_trips:
-        trip_id = list(common_trips)[0]
-        stop_times = get_trip_stop_times(gtfs_data, trip_id)
-        path = [st for st in stop_times if st["stop_id"] in [start_stop_id, end_stop_id]]
-        return path
-    return []
-
-def get_stop_coordinates(gtfs_data, stop_id):
-    """Returns coordinates of a given stop_id."""
-    for stop in gtfs_data["stops"]:
-        if stop["stop_id"] == stop_id:
-            return {
-                "lat": float(stop["stop_lat"]),
-                "lon": float(stop["stop_lon"]),
-                "stop_name": stop.get("stop_name")
-            }
-    return {}
-
-def get_routes_by_stop(gtfs_data, stop_id):
-    """Returns routes serving a stop by checking stop_times -> trips -> routes."""
-    trip_ids = {st["trip_id"] for st in gtfs_data["stop_times"] if st["stop_id"] == stop_id}
-    route_ids = {
-        trip["route_id"] for trip in gtfs_data["trips"] if trip["trip_id"] in trip_ids
-    }
-    return [
-        route for route in gtfs_data["routes"] if route["route_id"] in route_ids
-    ]
-
 def get_trip_stops(gtfs_data, trip_id):
-    """Returns all stops along a trip."""
+    """Get ordered list of stops for a given trip."""
     stop_times = get_trip_stop_times(gtfs_data, trip_id)
     stops = []
     for st in stop_times:
@@ -223,8 +161,26 @@ def get_trip_stops(gtfs_data, trip_id):
             })
     return stops
 
+def get_routes_by_stop(gtfs_data, stop_id):
+    """Return all routes passing through a given stop."""
+    trip_ids = {st["trip_id"] for st in gtfs_data["stop_times"] if st["stop_id"] == stop_id}
+    route_ids = {
+        trip["route_id"] for trip in gtfs_data["trips"] if trip["trip_id"] in trip_ids
+    }
+    return [route for route in gtfs_data["routes"] if route["route_id"] in route_ids]
+
+def get_stop_coordinates(gtfs_data, stop_id):
+    for stop in gtfs_data["stops"]:
+        if stop["stop_id"] == stop_id:
+            return {
+                "lat": float(stop["stop_lat"]),
+                "lon": float(stop["stop_lon"]),
+                "stop_name": stop.get("stop_name"),
+            }
+    return {}
+
 def get_departure_board(gtfs_data, stop_id, time_window=30):
-    """Returns upcoming departures at a stop within the given time window."""
+    """Upcoming departures at a stop."""
     now = datetime.now()
     end_time = (now + timedelta(minutes=time_window)).strftime("%H:%M:%S")
 
@@ -234,78 +190,16 @@ def get_departure_board(gtfs_data, stop_id, time_window=30):
     ]
     return sorted(departures, key=lambda x: x["departure_time"])[:10]
 
-def find_trip_plan_with_transfers(start_stop_id, end_stop_id, current_time_str="08:00:00"):
-    # Convert time
-    try:
-        current_time = datetime.strptime(current_time_str, "%H:%M:%S").time()
-    except:
-        current_time = datetime.strptime("08:00:00", "%H:%M:%S").time()
-
-    # Preprocess stop_times into a graph of connections
-    stop_departures = defaultdict(list)
-    stop_arrivals = defaultdict(list)
-
-    for _, row in gtfs_data['stop_times'].iterrows():
-        stop_id = row['stop_id']
-        trip_id = row['trip_id']
-        arrival = datetime.strptime(row['arrival_time'], "%H:%M:%S").time()
-        departure = datetime.strptime(row['departure_time'], "%H:%M:%S").time()
-        stop_seq = row['stop_sequence']
-        stop_departures[stop_id].append((trip_id, stop_seq, departure))
-        stop_arrivals[trip_id].append((stop_id, stop_seq, arrival))
-
-    # Build a BFS queue: (current_stop, current_time, path_so_far)
-    queue = deque()
-    visited = set()
-    queue.append((start_stop_id, current_time, []))
-
-    while queue:
-        current_stop, current_time, path = queue.popleft()
-        if (current_stop, current_time) in visited:
-            continue
-        visited.add((current_stop, current_time))
-
-        # Look for all trips departing from current stop
-        for trip_id, stop_seq, departure_time in stop_departures.get(current_stop, []):
-            # Only consider trips departing AFTER the current time + transfer buffer
-            if departure_time < (datetime.combine(datetime.today(), current_time) + timedelta(minutes=MIN_TRANSFER_MINUTES)).time():
-                continue
-
-            # Get full trip stops for this trip
-            trip_stops = sorted(stop_arrivals[trip_id], key=lambda x: x[1])
-            for i, (stop_id, seq, arrival_time) in enumerate(trip_stops):
-                if stop_id == current_stop:
-                    # Start from this stop and look ahead
-                    for j in range(i + 1, len(trip_stops)):
-                        next_stop_id, _, next_arrival_time = trip_stops[j]
-                        new_path = path + [{
-                            "trip_id": trip_id,
-                            "from_stop": current_stop,
-                            "to_stop": next_stop_id,
-                            "departure_time": departure_time.strftime("%H:%M:%S"),
-                            "arrival_time": next_arrival_time.strftime("%H:%M:%S")
-                        }]
-
-                        if next_stop_id == end_stop_id:
-                            return new_path  # Found a valid route
-                        
-                        queue.append((next_stop_id, next_arrival_time, new_path))
-
-    return []  # No path found
-
-
-# --- Initialization ---
-
-# Load and initialize once if needed
-gtfs_data = load_gtfs_data()
-stops_gdf = get_stops_gdf(gtfs_data)
-spatial_idx = build_spatial_index(stops_gdf)
-
-# --- Example usage ---
-
-if __name__ == "__main__":
-    user_location = (-1.286389, 36.817223)  # Nairobi CBD
-    nearby = find_nearest_stops(user_location, stops_gdf, spatial_idx)
-    print("Nearby stops:")
-    for stop in nearby:
-        print(f"{stop['stop_id']} - {stop['stop_name']}")
+def calculate_path(gtfs_data, start_stop_id, end_stop_id):
+    """Returns direct path between stops if they share a trip."""
+    trips_with_start = {
+        st["trip_id"] for st in gtfs_data["stop_times"] if st["stop_id"] == start_stop_id
+    }
+    trips_with_end = {
+        st["trip_id"] for st in gtfs_data["stop_times"] if st["stop_id"] == end_stop_id
+    }
+    common_trips = trips_with_start & trips_with_end
+    if common_trips:
+        trip_id = list(common_trips)[0]
+        return get_trip_stops(gtfs_data, trip_id)
+    return []
