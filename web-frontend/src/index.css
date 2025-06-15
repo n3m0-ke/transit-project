@@ -1,10 +1,11 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', sans-serif;
+@import "leaflet/dist/leaflet.css";
+
+/* Optional: prevent scrolling for the landing page */
+html, body, #root {
+  height: 100%;
   margin: 0;
-  background-color: #f9fafb;
-} 
+}
