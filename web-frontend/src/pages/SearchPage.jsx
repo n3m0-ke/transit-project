@@ -45,7 +45,7 @@ export default function SearchRoutes() {
   return (
     <div className="relative h-screen">
       {/* Top Navbar */}
-      <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-white/80 backdrop-blur-sm shadow-sm">
+      <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-transparent shadow-sm">
         <div className="text-xl font-bold text-gray-800">GTFS Explorer</div>
         <div className="space-x-4">
           <button className="text-blue-600 font-semibold hover:underline">Sign In</button>
@@ -85,7 +85,8 @@ export default function SearchRoutes() {
 
         {/* Sliding Panels */}
         {activePanel && (
-          <div className="absolute top-16 left-16 z-10 w-80 bg-white h-[calc(100%-8rem)] shadow-lg border-r border-gray-200 animate-slideIn">
+          <div className="absolute top-16 left-16 z-10 w-80 bg-white h-[calc(100%-8rem)] shadow-lg border-r border-gray-200 animate-slideIn"
+          style={{ animation: "slideIn 300ms ease-out forwards" }}>
             <div className="flex justify-between items-center p-4 border-b border-gray-200">
               <h2 className="font-semibold capitalize text-gray-800">
                 {activePanel}

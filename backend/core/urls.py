@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from core import views
 
 urlpatterns = [
@@ -10,4 +10,9 @@ urlpatterns = [
     path("routes_by_stop/", views.stop_routes, name="routes_by_stop"),
     path("trip_stops/", views.trip_stops, name="trip_stops"),  # Duplicate?
     path("departure_board/", views.stop_board, name="departure_board"),
+
+    #authentication
+    path("auth/", include("dj_rest_auth.urls")),
+    path("auth/registration/", include("dj_rest_auth.registration.urls")),
+    path("auth/social/", include("allauth.socialaccount.urls")),
 ]
