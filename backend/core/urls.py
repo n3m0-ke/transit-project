@@ -1,4 +1,5 @@
 from django.urls import path, include
+from dj_rest_auth.jwt_auth import get_refresh_view
 from core import views
 
 urlpatterns = [
@@ -15,4 +16,11 @@ urlpatterns = [
     path("auth/", include("dj_rest_auth.urls")),
     path("auth/registration/", include("dj_rest_auth.registration.urls")),
     path("auth/social/", include("allauth.socialaccount.urls")),
+
+    path("token/refresh/", get_refresh_view().as_view(), name='token_refresh'),
+
+    path('dj-rest-auth/', include('dj_rest_auth.urls')),
+    path('dj-rest-auth/registration/', include('dj_rest_auth.registration.urls')),
+    path('accounts/', include('allauth.urls')),  # Needed for social login
+
 ]
