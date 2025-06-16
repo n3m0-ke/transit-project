@@ -18,6 +18,7 @@ djoser==2.3.1
 dotenv==0.9.9
 furl==2.1.4
 geopandas==1.1.0
+gunicorn==23.0.0
 h11==0.16.0
 h2==4.2.0
 hpack==4.1.0
@@ -62,3 +63,4 @@ sqlparse==0.5.3
 typing_extensions==4.13.2
 tzdata==2025.2
 urllib3==2.4.0
+webtoon_downloader==2.0.0
