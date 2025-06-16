@@ -1,6 +1,7 @@
 from django.urls import path, include
 from dj_rest_auth.jwt_auth import get_refresh_view
 from core import views
+from core.social_login import GoogleLogin
 
 urlpatterns = [
     path("nearest_stops/", views.get_nearby_stops, name="nearest_stops"),
@@ -16,6 +17,7 @@ urlpatterns = [
     path("auth/", include("dj_rest_auth.urls")),
     path("auth/registration/", include("dj_rest_auth.registration.urls")),
     path("auth/social/", include("allauth.socialaccount.urls")),
+    path("auth/social/google/", GoogleLogin.as_view(), name="google_login"),
 
     path("token/refresh/", get_refresh_view().as_view(), name='token_refresh'),
 
