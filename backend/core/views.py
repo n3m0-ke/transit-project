@@ -100,3 +100,12 @@ def find_path(request):
         return JsonResponse({"path": path})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+    
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def protected_view(request):
+    return Response({'message': f'Hello, {request.user.email}. You are authenticated!'})

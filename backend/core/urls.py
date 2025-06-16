@@ -13,6 +13,7 @@ urlpatterns = [
     path("trip_stops/", views.trip_stops, name="trip_stops"),  # Duplicate?
     path("departure_board/", views.stop_board, name="departure_board"),
 
+
     #authentication
     path("auth/", include("dj_rest_auth.urls")),
     path("auth/registration/", include("dj_rest_auth.registration.urls")),
@@ -25,4 +26,6 @@ urlpatterns = [
     path('dj-rest-auth/registration/', include('dj_rest_auth.registration.urls')),
     path('accounts/', include('allauth.urls')),  # Needed for social login
 
+    #test protected route
+    path("protected/", views.protected_view, name="protected_view"),
 ]
