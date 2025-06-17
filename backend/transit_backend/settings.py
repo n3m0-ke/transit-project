@@ -41,7 +41,7 @@ INSTALLED_APPS = [
 
     'rest_framework',
     'core',
-    "rest_framework.authtoken",
+    # "rest_framework.authtoken",
     "djoser",
     "dj_rest_auth",
     "dj_rest_auth.registration",
@@ -145,15 +145,21 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SITE_ID = 1
 
+REST_USE_JWT = True
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'dj_rest_auth.jwt_auth.JWTCookieAuthentication',  # Optional: if using cookie JWTs
-        # 'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # 'dj_rest_auth.jwt_auth.JWTCookieAuthentication',  # Optional: if using cookie JWTs
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     )
 }
 
-REST_USE_JWT = True
-
+REST_AUTH = {
+    'TOKEN_MODEL': None,
+    'USE_JWT': True,
+    'JWT_AUTH_RETURN_EXPIRATION': True,
+    'JWT_AUTH_HTTPONLY': False
+}
 
 ACCOUNT_EMAIL_VERIFICATION = "none"
 ACCOUNT_AUTHENTICATION_METHOD = "email"

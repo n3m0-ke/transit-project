@@ -14,9 +14,9 @@ urlpatterns = [
     path("departure_board/", views.stop_board, name="departure_board"),
 
 
-    #authentication
-    path("auth/", include("dj_rest_auth.urls")),
-    path("auth/registration/", include("dj_rest_auth.registration.urls")),
+    # #authentication
+    # path("auth/", include("dj_rest_auth.urls")),
+    # path("auth/registration/", include("dj_rest_auth.registration.urls")),
     path("auth/social/", include("allauth.socialaccount.urls")),
     path("auth/social/google/", GoogleLogin.as_view(), name="google_login"),
 
