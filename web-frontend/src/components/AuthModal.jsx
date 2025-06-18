@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
+import API from '../api';
 
 export default function AuthModal({ isOpen, onClose, setUser }) {
     const [tab, setTab] = useState("signin");
@@ -23,7 +24,7 @@ export default function AuthModal({ isOpen, onClose, setUser }) {
 
         try {
             if (tab === "signin") {
-                const res = await axios.post("https://transit-project.onrender.com/api/dj-rest-auth/login/", {
+                const res = await API.post("dj-rest-auth/login/", {
                     email: form.email,
                     password: form.password,
                 });
@@ -44,7 +45,7 @@ export default function AuthModal({ isOpen, onClose, setUser }) {
                     return;
                 }
 
-                const res = await axios.post("https://transit-project.onrender.com/api/dj-rest-auth/registration/", {
+                const res = await API.post("dj-rest-auth/registration/", {
                     username: form.username,
                     email: form.email,
                     password1: form.password,
@@ -59,6 +60,7 @@ export default function AuthModal({ isOpen, onClose, setUser }) {
         } catch (err) {
             //   setError(err.response?.data?.detail || "Something went wrong.");
             const data = err.response?.data;
+            console.log(err.response?.data);
             if (data) {
                 if (data.email) setError(`Email: ${data.email.join(" ")}`);
                 else if (data.password1) setError(`Password: ${data.password1.join(" ")}`);
@@ -99,12 +101,12 @@ export default function AuthModal({ isOpen, onClose, setUser }) {
                     {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
                     <form className="space-y-4" onSubmit={handleSubmit}>
                         {tab === "signup" && (
-                            <input type="text" name="username" placeholder="Username" value={form.username} onChange={handleChange} className="w-full p-2 border rounded" />
+                            <input type="text" name="username" placeholder="Username" value={form.username} onChange={handleChange} className="w-full p-2 border rounded text-black" />
                         )}
-                        <input type="email" name="email" placeholder="Email" value={form.email} onChange={handleChange} className="w-full p-2 border rounded" />
-                        <input type="password" name="password" placeholder="Password" value={form.password} onChange={handleChange} className="w-full p-2 border rounded" />
+                        <input type="email" name="email" placeholder="Email" value={form.email} onChange={handleChange} className="w-full p-2 border rounded text-black" />
+                        <input type="password" name="password" placeholder="Password" value={form.password} onChange={handleChange} className="w-full p-2 border rounded text-black" />
                         {tab === "signup" && (
-                            <input type="password" name="cpassword" placeholder="Confirm Password" value={form.cpassword} onChange={handleChange} className="w-full p-2 border rounded" />
+                            <input type="password" name="cpassword" placeholder="Confirm Password" value={form.cpassword} onChange={handleChange} className="w-full p-2 border rounded text-black" />
                         )}
                         <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
                             {loading ? "Processing..." : tab === "signin" ? "Sign In" : "Sign Up"}
