@@ -7,6 +7,12 @@ import AuthModal from "../components/AuthModal";
 
 const MAP_CENTER = [-1.286389, 36.817223];
 const MAP_ZOOM = 12;
+const NAIROBI_BOUNDS = {
+  minLat: -1.45, // Southern boundary
+  maxLat: -1.15, // Northern boundary
+  minLon: 36.65, // Western boundary
+  maxLon: 37.05, // Eastern boundary
+};
 
 export default function SearchRoutes() {
   const [stops, setStops] = useState([]);
@@ -18,6 +24,11 @@ export default function SearchRoutes() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
+
+  const [lat, setLat] = useState(null);
+  const [lon, setLon] = useState(null);
+  const [selectedCoords, setSelectedCoords] = useState(null);
+  const [mapSelectionMode, setMapSelectionMode] = useState(false); // For map selection mode
 
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
@@ -51,8 +62,113 @@ export default function SearchRoutes() {
     });
   }, []);
 
+  const handleMapClick = (e) => {
+    const { lat, lng } = e.latlng;
+
+    if (
+      lat >= NAIROBI_BOUNDS.minLat &&
+      lat <= NAIROBI_BOUNDS.maxLat &&
+      lng >= NAIROBI_BOUNDS.minLon &&
+      lng <= NAIROBI_BOUNDS.maxLon
+    ) {
+      setSelectedCoords({ lat, lon: lng });
+      setLat(lat);
+      setLon(lng);
+    } else {
+      alert("Please select a location within Nairobi.");
+    }
+  };
+
+
+  const handleDetectLocation = () => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(pos.coords.latitude);
+        setLon(pos.coords.longitude);
+        setSelectedCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      },
+      () => alert("Failed to detect location. Please enter manually.")
+    );
+  };
+
+  const handleSearchStops = async () => {
+    if (!lat || !lon) {
+      alert("Please select a location first.");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://transit-project-backend.onrender.com/api/nearest_stops/?lat=${lat}&lon=${lon}&radius=0.3`
+      );
+      const data = await response.json();
+
+      if (data.stops && data.stops.length > 0) {
+        console.log("Nearby stops:", data.stops); // Replace with UI update logic
+        setStops(data.stops); // Update UI with stops list
+      } else {
+        alert("No stops found nearby.");
+      }
+    } catch (err) {
+      console.error("Error fetching stops:", err);
+      alert("Failed to fetch nearby stops.");
+    }
+  };
+
   const panels = {
-    home: <div className="p-4">Welcome to the GTFS Planner</div>,
+    home: <div className="p-4">
+      <div className="p-4 space-y-4">
+        <h2 className="text-xl font-bold text-gray-800">Find Nearest Stops</h2>
+        <p className="text-sm text-gray-600">Select a location or let us detect yours.</p>
+
+        {/* Auto-detect location */}
+        <button
+          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
+          onClick={handleDetectLocation}
+        >
+          Use My Location
+        </button>
+
+        {/* Click-on-map input */}
+        <div className="relative">
+          <button
+            className="w-full bg-gray-200 py-2 rounded hover:bg-gray-300 transition"
+            onClick={() => setMapSelectionMode(true)}
+          >
+            Click on Map to Select Location
+          </button>
+          {selectedCoords && (
+            <p className="text-sm text-gray-600 mt-2">Selected: {selectedCoords.lat}, {selectedCoords.lon}</p>
+          )}
+        </div>
+
+        {/* Manual input */}
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="text"
+            placeholder="Latitude"
+            className="p-2 border rounded text-black"
+            value={lat}
+            onChange={(e) => setLat(e.target.value)}
+          />
+          <input
+            type="text"
+            placeholder="Longitude"
+            className="p-2 border rounded text-black"
+            value={lon}
+            onChange={(e) => setLon(e.target.value)}
+          />
+        </div>
+
+        {/* Search Button */}
+        <button
+          className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 transition"
+          onClick={handleSearchStops}
+        >
+          Search Stops
+        </button>
+      </div>
+    </div>,
     routes: <div className="p-4">List of available routes here</div>,
     saved: <div className="p-4">Your saved stops & locations</div>,
   };
@@ -72,9 +188,8 @@ export default function SearchRoutes() {
           {isAuthenticated ? (
             <button
               onClick={() => {
-                localStorage.removeItem("accessToken");
-                localStorage.removeItem("refreshToken");
-                localStorage.removeItem("user");
+                localStorage.clear();
+                setUser(null);
                 setIsAuthenticated(false);
                 setActivePanel(null);
               }}
@@ -85,7 +200,7 @@ export default function SearchRoutes() {
           ) : (
             <>
               <button onClick={() => { setShowModal(true); setAuthTab("signin"); }} className="text-black font-medium hover:underline">Sign In</button>
-            <button onClick={() => { setShowModal(true); setAuthTab("signup"); }} className="text-black font-medium hover:underline">Sign Up</button>
+              <button onClick={() => { setShowModal(true); setAuthTab("signup"); }} className="text-black font-medium hover:underline">Sign Up</button>
             </>
           )}
         </div>
@@ -147,6 +262,7 @@ export default function SearchRoutes() {
             center={MAP_CENTER}
             zoom={MAP_ZOOM}
             style={{ height: "100%", width: "100%" }}
+            onClick={handleMapClick}
           >
             <TileLayer
               attribution='&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>'
