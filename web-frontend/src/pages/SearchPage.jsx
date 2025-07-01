@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Papa from "papaparse";
 import { MapContainer, TileLayer } from "react-leaflet";
-import { HomeIcon as Home, BookmarkIcon as Bookmark, RouteIcon as Route } from 'lucide-react'
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -11,6 +10,7 @@ import MapPanel from "../components/MapPanel";
 import StopMarker from "../components/StopMarker";
 import AuthModal from "../components/AuthModal";
 import { haversineDistance, NAIROBI_BOUNDS } from "../utils/haversine";
+import { Home, Route, Bookmark } from "lucide-react";
 
 const MAP_CENTER = [-1.286389, 36.817223];
 const MAP_ZOOM = 12;
@@ -27,6 +27,9 @@ export default function SearchRoutes() {
   const [lat, setLat] = useState(null);
   const [lon, setLon] = useState(null);
   const [selectedCoords, setSelectedCoords] = useState(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const mapRef = useRef(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
@@ -60,7 +63,7 @@ export default function SearchRoutes() {
           .filter((s) => s !== null);
 
         setAllStops(parsed);
-        setStops(parsed);
+        setStops([]);
       },
       error: (err) => console.error("Parsing error:", err),
     });
@@ -83,13 +86,21 @@ export default function SearchRoutes() {
   };
 
   const handleDetectLocation = () => {
+    setLoadingLocation(true);
+    setLat(null);
+    setLon(null);
+
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         setLat(coords.latitude);
         setLon(coords.longitude);
         setSelectedCoords({ lat: coords.latitude, lon: coords.longitude });
+        setLoadingLocation(false);
       },
-      () => alert("Failed to detect location.")
+      () => {
+        alert("Failed to detect location.");
+        setLoadingLocation(false);
+      }
     );
   };
 
@@ -99,18 +110,27 @@ export default function SearchRoutes() {
       return;
     }
 
-    const radiusKm = 0.3;
+    setSearching(true);
+
+    const radiusKm = 0.5;
     const nearby = allStops.filter((stop) => {
       const d = haversineDistance(lat, lon, stop.stop_lat, stop.stop_lon);
       return d <= radiusKm;
     });
 
-    if (nearby.length > 0) {
-      setStops(nearby);
-    } else {
-      alert("No stops found nearby.");
-      setStops([]);
-    }
+    setTimeout(() => {
+      if (nearby.length > 0) {
+        setStops(nearby);
+
+        if (mapRef.current) {
+          mapRef.current.setView([lat, lon], 15);
+        }
+      } else {
+        alert("No stops found nearby.");
+        setStops([]);
+      }
+      setSearching(false);
+    }, 300);
   };
 
   return (
@@ -146,6 +166,8 @@ export default function SearchRoutes() {
             selectedCoords={selectedCoords}
             handleDetectLocation={handleDetectLocation}
             handleSearchStops={handleSearchStops}
+            loadingLocation={loadingLocation}
+            searching={searching}
             setActivePanel={setActivePanel}
           />
         )}
@@ -155,7 +177,10 @@ export default function SearchRoutes() {
             center={MAP_CENTER}
             zoom={MAP_ZOOM}
             style={{ height: "100%", width: "100%" }}
-            whenCreated={(map) => map.on("click", handleMapClick)}
+            whenCreated={(map) => {
+              map.on("click", handleMapClick);
+              mapRef.current = map;
+            }}
           >
             <TileLayer
               attribution='&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>'
