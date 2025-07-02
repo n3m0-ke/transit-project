@@ -136,9 +136,6 @@ export default function SearchRoutes() {
   return (
     <div className="relative h-screen">
       <Navbar
-        isAuthenticated={isAuthenticated}
-        setIsAuthenticated={setIsAuthenticated}
-        setUser={setUser}
         setShowModal={setShowModal}
         setAuthTab={setAuthTab}
         setActivePanel={setActivePanel}
@@ -196,7 +193,6 @@ export default function SearchRoutes() {
       <AuthModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        setUser={setUser}
         tab={authTab}
       />
     </div>

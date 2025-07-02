@@ -1,12 +1,15 @@
 import { useState } from "react";
 import axios from "axios";
 import API from '../api';
+import { useAuth } from "../context/AuthContext";
 
-export default function AuthModal({ isOpen, onClose, setUser }) {
+export default function AuthModal({ isOpen, onClose }) {
     const [tab, setTab] = useState("signin");
     const [form, setForm] = useState({ username: "", email: "", password: "", cpassword: "" });
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+
+    const { setUser, setIsAuthenticated } = useAuth();
 
     if (!isOpen) return null;
 
@@ -28,11 +31,19 @@ export default function AuthModal({ isOpen, onClose, setUser }) {
                     email: form.email,
                     password: form.password,
                 });
-                setUser(res.data.user);
+                // console.log(JSON.stringify(res.data));
                 localStorage.setItem("accessToken", res.data.access);
                 localStorage.setItem("refreshToken", res.data.refresh);
                 localStorage.setItem("user", JSON.stringify(res.data.user));
-                onClose();
+
+                // console.log(localStorage.getItem("accessToken"));
+                // console.log(localStorage.getItem("refreshToken"));
+                // console.log(localStorage.getItem("user"));
+
+                setUser(res.data.user);                // ✅ update context state
+                setIsAuthenticated(true);             // ✅ update context state
+                onClose();                            // ✅ close modal
+
             } else {
                 if (!isStrongPassword(form.password)) {
                     setError("Password must be at least 8 characters and contain uppercase, lowercase, and number.");
@@ -51,11 +62,18 @@ export default function AuthModal({ isOpen, onClose, setUser }) {
                     password1: form.password,
                     password2: form.cpassword,
                 });
-                setUser(res.data.user);
+
+
                 localStorage.setItem("accessToken", res.data.access);
                 localStorage.setItem("refreshToken", res.data.refresh);
                 localStorage.setItem("user", JSON.stringify(res.data.user));
-                onClose();
+
+
+
+                setUser(JSON.stringify(res.data.user));                // ✅ update context state
+                setIsAuthenticated(true);             // ✅ update context state
+                onClose();                            // ✅ close modal
+
             }
         } catch (err) {
             //   setError(err.response?.data?.detail || "Something went wrong.");
@@ -69,6 +87,18 @@ export default function AuthModal({ isOpen, onClose, setUser }) {
                 else setError("An unexpected error occurred.");
             } else {
                 setError("Network error. Please try again.");
+                console.error("Full error object:", err);
+
+                if (err.response) {
+                    console.error("Error response data:", err.response.data);
+                    console.error("Status:", err.response.status);
+                    console.error("Headers:", err.response.headers);
+                } else if (err.request) {
+                    console.error("No response received. Request was:", err.request);
+                } else {
+                    console.error("Error setting up request:", err.message);
+                }
+
             }
         } finally {
             setLoading(false);

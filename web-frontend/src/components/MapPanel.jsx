@@ -1,8 +1,8 @@
 import React from "react";
+import { useAuth } from "../context/AuthContext"; // 🔁 Import auth context
 
 export default function MapPanel({
   activePanel,
-  isAuthenticated,
   setShowModal,
   setAuthTab,
   lat,
@@ -14,8 +14,10 @@ export default function MapPanel({
   handleSearchStops,
   loadingLocation,
   searching,
-  setActivePanel
+  setActivePanel,
 }) {
+  const { isAuthenticated } = useAuth(); // 🔁 Use context instead of props
+
   const renderHomePanel = () => (
     <div className="p-4 space-y-4">
       <h2 className="text-xl font-bold text-gray-800">Find Nearest Stops</h2>
