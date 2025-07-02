@@ -1,5 +1,6 @@
-import React from "react";
-import { useAuth } from "../context/AuthContext"; // 🔁 Import auth context
+import React, { useState, useEffect } from "react";
+import Select from "react-select";
+import { useAuth } from "../context/AuthContext";
 
 export default function MapPanel({
   activePanel,
@@ -15,8 +16,20 @@ export default function MapPanel({
   loadingLocation,
   searching,
   setActivePanel,
+  allStops = [],
 }) {
-  const { isAuthenticated } = useAuth(); // 🔁 Use context instead of props
+  const { isAuthenticated } = useAuth();
+  const [startStopId, setStartStopId] = useState(null);
+  const [endStopId, setEndStopId] = useState(null);
+
+  const handleTripSearch = () => {
+    if (!startStopId || !endStopId) {
+      alert("Please select both start and end stops.");
+      return;
+    }
+    console.log("Searching trips from", startStopId, "to", endStopId);
+    // Future: send API request to backend
+  };
 
   const renderHomePanel = () => (
     <div className="p-4 space-y-4">
@@ -80,7 +93,28 @@ export default function MapPanel({
 
   const renderRoutesPanel = () =>
     isAuthenticated ? (
-      <div className="p-4">List of available routes (to be implemented)</div>
+      <div className="p-4 space-y-4">
+        <h2 className="text-lg font-semibold text-gray-800">Plan a Trip</h2>
+
+        <Select
+          options={allStops.map((stop) => ({ value: stop.stop_id, label: stop.stop_name }))}
+          onChange={(option) => setStartStopId(option.value)}
+          placeholder="Select start stop"
+        />
+
+        <Select
+          options={allStops.map((stop) => ({ value: stop.stop_id, label: stop.stop_name }))}
+          onChange={(option) => setEndStopId(option.value)}
+          placeholder="Select end stop"
+        />
+
+        <button
+          className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700"
+          onClick={handleTripSearch}
+        >
+          Search Trips
+        </button>
+      </div>
     ) : (
       <div className="p-4 text-gray-600">
         <p>🚫 Please sign in to view route information.</p>

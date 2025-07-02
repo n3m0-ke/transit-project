@@ -166,6 +166,7 @@ export default function SearchRoutes() {
             loadingLocation={loadingLocation}
             searching={searching}
             setActivePanel={setActivePanel}
+            allStops={allStops}
           />
         )}
 
