@@ -1,3 +1,4 @@
+from venv import logger
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from django.views.decorators.csrf import csrf_exempt
@@ -100,6 +101,32 @@ def find_path(request):
         return JsonResponse({"path": path})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+@require_GET
+def trip_search(request):
+    """
+    Search for a trip from start_stop to end_stop.
+    """
+    try:
+        start = request.GET.get("start_stop")
+        end = request.GET.get("end_stop")
+        if not start or not end:
+            return JsonResponse({"error": "start_stop and end_stop required"}, status=400)
+
+        # Call calculate_path
+        result = calculate_path(gtfs_data, start, end)
+
+        # Build response JSON
+        response = {
+            "stops": result["path"],  # list of stop dicts
+            "note": result["note"]
+        }
+        return JsonResponse(response)
+
+    except Exception as e:
+        logger.error(f"Trip search error: {e}")
+        return JsonResponse({"error": str(e)}, status=500)
+
     
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated

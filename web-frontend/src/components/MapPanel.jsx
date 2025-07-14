@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Select from "react-select";
 import { useAuth } from "../context/AuthContext";
+import API from "../api";
 
 export default function MapPanel({
   activePanel,
@@ -22,13 +23,33 @@ export default function MapPanel({
   const [startStopId, setStartStopId] = useState(null);
   const [endStopId, setEndStopId] = useState(null);
 
-  const handleTripSearch = () => {
+  const handleTripSearch = async () => {
     if (!startStopId || !endStopId) {
       alert("Please select both start and end stops.");
       return;
     }
     console.log("Searching trips from", startStopId, "to", endStopId);
     // Future: send API request to backend
+
+    try{
+      const res = await API.get(`calculate_path/?start_stop=${startStopId}&end_stop=${endStopId}`);
+      
+      if (res){console.log(JSON.stringify(res.data))};
+    //   if (res.ok) {
+    //   if (data.path && data.path.length > 0) {
+    //     console.log("Found direct trip path:", data.path);
+    //     alert(`Trip found with ${data.path.length} stops.`);
+    //     // Optionally: store this in a state to display below
+    //   } else {
+    //     alert("No direct trips found between the selected stops.");
+    //   }
+    // } else {
+    //   alert(data.error || "Trip search failed.");
+    // }
+    }catch (err){
+      console.error("Trips search error:", err);
+
+    }
   };
 
   const renderHomePanel = () => (

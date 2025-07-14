@@ -190,8 +190,9 @@ def get_departure_board(gtfs_data, stop_id, time_window=30):
     ]
     return sorted(departures, key=lambda x: x["departure_time"])[:10]
 
-def calculate_path(gtfs_data, start_stop_id, end_stop_id):
-    """Returns direct path between stops if they share a trip."""
+# Calcuation of paths functions
+def find_direct_path(gtfs_data, start_stop_id, end_stop_id):
+    """Check if start & end are on the same trip."""
     trips_with_start = {
         st["trip_id"] for st in gtfs_data["stop_times"] if st["stop_id"] == start_stop_id
     }
@@ -202,4 +203,114 @@ def calculate_path(gtfs_data, start_stop_id, end_stop_id):
     if common_trips:
         trip_id = list(common_trips)[0]
         return get_trip_stops(gtfs_data, trip_id)
-    return []
+    return None
+
+def find_multi_transfer_path(gtfs_data, start_stop_id, end_stop_id):
+    """
+    Search for a path allowing transfers between trips.
+    For simplicity, use BFS on stops and trips.
+    """
+    # Build graph: stop_id → list of adjacent stops on trips
+    adjacency = defaultdict(set)
+    for stop_time in gtfs_data["stop_times"]:
+        trip_id = stop_time["trip_id"]
+        stop_sequence = int(stop_time["stop_sequence"])
+        next_stop = next((
+            st["stop_id"] for st in gtfs_data["stop_times"]
+            if st["trip_id"] == trip_id and int(st["stop_sequence"]) == stop_sequence + 1
+        ), None)
+        if next_stop:
+            adjacency[stop_time["stop_id"]].add(next_stop)
+
+    # BFS from start_stop_id
+    visited = set()
+    queue = deque([(start_stop_id, [start_stop_id])])
+    while queue:
+        current_stop, path = queue.popleft()
+        if current_stop == end_stop_id:
+            # Return stop details for the path
+            return [
+                next(stop for stop in gtfs_data["stops"] if stop["stop_id"] == sid)
+                for sid in path
+            ]
+        if current_stop in visited:
+            continue
+        visited.add(current_stop)
+        for neighbor in adjacency[current_stop]:
+            queue.append((neighbor, path + [neighbor]))
+
+    return None
+
+def bridge_disconnected_clusters(gtfs_data, start_stop_id, end_stop_id, max_distance_km):
+    """
+    Handles disconnected clusters by finding nearby stops and
+    attempting to connect them via multi-transfer.
+    """
+    stops_df = pd.DataFrame(gtfs_data["stops"])
+
+    # Coordinates of start & end
+    start_coords = stops_df.loc[stops_df["stop_id"] == start_stop_id][["stop_lat", "stop_lon"]].iloc[0]
+    end_coords = stops_df.loc[stops_df["stop_id"] == end_stop_id][["stop_lat", "stop_lon"]].iloc[0]
+
+    # Nearby stops within max_distance_km
+    stops_df["distance_to_start"] = (
+        ((stops_df["stop_lat"] - start_coords["stop_lat"]) ** 2 +
+         (stops_df["stop_lon"] - start_coords["stop_lon"]) ** 2) ** 0.5
+    )
+    stops_df["distance_to_end"] = (
+        ((stops_df["stop_lat"] - end_coords["stop_lat"]) ** 2 +
+         (stops_df["stop_lon"] - end_coords["stop_lon"]) ** 2) ** 0.5
+    )
+
+    nearby_start_stops = stops_df[stops_df["distance_to_start"] <= max_distance_km / 111]["stop_id"]
+    nearby_end_stops = stops_df[stops_df["distance_to_end"] <= max_distance_km / 111]["stop_id"]
+
+    # Try connecting all nearby pairs
+    for alt_start in nearby_start_stops:
+        for alt_end in nearby_end_stops:
+            sub_path = find_multi_transfer_path(gtfs_data, alt_start, alt_end)
+            if sub_path:
+                transfer_info = f"{start_stop_id} ↔ {alt_start} and {alt_end} ↔ {end_stop_id}"
+                return sub_path, transfer_info
+
+    return None, None
+
+def calculate_path(gtfs_data, start_stop_id, end_stop_id, max_transfer_distance_km=2):
+    """
+    Calculates a path from start_stop_id to end_stop_id.
+    1. Try direct connection on same trip.
+    2. Try multi-transfer routes.
+    3. Try bridging disconnected clusters via nearby stops.
+    """
+
+    # === 1. Direct connection ===
+    path = find_direct_path(gtfs_data, start_stop_id, end_stop_id)
+    if path:
+        return {
+            "path": path,
+            "note": "Direct connection found on a single route."
+        }
+
+    # === 2. Multi-transfer connection ===
+    path = find_multi_transfer_path(gtfs_data, start_stop_id, end_stop_id)
+    if path:
+        return {
+            "path": path,
+            "note": "Multi-transfer route found connecting start and end stops."
+        }
+
+    # === 3. Disconnected clusters: try bridging nearby stops ===
+    path, transfer_info = bridge_disconnected_clusters(
+        gtfs_data, start_stop_id, end_stop_id, max_transfer_distance_km
+    )
+    if path:
+        return {
+            "path": path,
+            "note": f"Manual transfer required between nearby stops: {transfer_info}"
+        }
+
+    # === No path found ===
+    return {
+        "path": [],
+        "note": "No GTFS connection found between selected stops."
+    }
