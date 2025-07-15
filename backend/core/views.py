@@ -118,14 +118,16 @@ def trip_search(request):
 
         # Build response JSON
         response = {
-            "stops": result["path"],  # list of stop dicts
-            "note": result["note"]
+            "type": result["type"],  # direct, multi_transfer, disconnected, none
+            "legs": result.get("legs", []),  # list of route legs
+            "note": result.get("note", "")
         }
         return JsonResponse(response)
 
     except Exception as e:
         logger.error(f"Trip search error: {e}")
         return JsonResponse({"error": str(e)}, status=500)
+
 
     
 from rest_framework.decorators import api_view, permission_classes

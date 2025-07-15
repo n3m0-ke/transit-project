@@ -22,6 +22,7 @@ export default function MapPanel({
   const { isAuthenticated } = useAuth();
   const [startStopId, setStartStopId] = useState(null);
   const [endStopId, setEndStopId] = useState(null);
+  const [tripPath, setTripPath] = useState(null);
 
   const handleTripSearch = async () => {
     if (!startStopId || !endStopId) {
@@ -33,8 +34,30 @@ export default function MapPanel({
 
     try{
       const res = await API.get(`calculate_path/?start_stop=${startStopId}&end_stop=${endStopId}`);
-      
-      if (res){console.log(JSON.stringify(res.data))};
+
+      if(res && res.data) {
+        const {stops, note} = res.data;
+
+        if (stops.length === 0) {
+          alert("❌ No trip found between selected stops.");
+          return;
+        }
+
+        console.log("Trip type: ", note);
+        stops.forEach((stop, index) => {
+          console.log(`${index + 1}. ${stop.stop_name} (${stop.stop_id})`);
+        })
+
+        alert(`✅ Trip found with ${stops.length} stops.\n\nType: ${note}`);
+
+        setTripPath({
+          type: note,
+          stops: stops,
+          note: note
+        })
+      }
+
+
     //   if (res.ok) {
     //   if (data.path && data.path.length > 0) {
     //     console.log("Found direct trip path:", data.path);
@@ -48,6 +71,7 @@ export default function MapPanel({
     // }
     }catch (err){
       console.error("Trips search error:", err);
+      alert("Failed to fetch trip path.");
 
     }
   };
