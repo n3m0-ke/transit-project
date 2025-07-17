@@ -32,11 +32,11 @@ export default function MapPanel({
     console.log("Searching trips from", startStopId, "to", endStopId);
     // Future: send API request to backend
 
-    try{
+    try {
       const res = await API.get(`calculate_path/?start_stop=${startStopId}&end_stop=${endStopId}`);
 
-      if(res && res.data) {
-        const {stops, note} = res.data;
+      if (res && res.data) {
+        const { stops, note } = res.data;
 
         if (stops.length === 0) {
           alert("❌ No trip found between selected stops.");
@@ -58,18 +58,18 @@ export default function MapPanel({
       }
 
 
-    //   if (res.ok) {
-    //   if (data.path && data.path.length > 0) {
-    //     console.log("Found direct trip path:", data.path);
-    //     alert(`Trip found with ${data.path.length} stops.`);
-    //     // Optionally: store this in a state to display below
-    //   } else {
-    //     alert("No direct trips found between the selected stops.");
-    //   }
-    // } else {
-    //   alert(data.error || "Trip search failed.");
-    // }
-    }catch (err){
+      //   if (res.ok) {
+      //   if (data.path && data.path.length > 0) {
+      //     console.log("Found direct trip path:", data.path);
+      //     alert(`Trip found with ${data.path.length} stops.`);
+      //     // Optionally: store this in a state to display below
+      //   } else {
+      //     alert("No direct trips found between the selected stops.");
+      //   }
+      // } else {
+      //   alert(data.error || "Trip search failed.");
+      // }
+    } catch (err) {
       console.error("Trips search error:", err);
       alert("Failed to fetch trip path.");
 
@@ -85,9 +85,8 @@ export default function MapPanel({
 
       <button
         disabled={loadingLocation}
-        className={`w-full py-2 rounded transition text-white ${
-          loadingLocation ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
-        }`}
+        className={`w-full py-2 rounded transition text-white ${loadingLocation ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
+          }`}
         onClick={handleDetectLocation}
       >
         {loadingLocation ? "Detecting..." : "Use My Location"}
@@ -126,9 +125,8 @@ export default function MapPanel({
 
       <button
         disabled={searching}
-        className={`w-full py-2 rounded text-white transition ${
-          searching ? "bg-green-400" : "bg-green-600 hover:bg-green-700"
-        }`}
+        className={`w-full py-2 rounded text-white transition ${searching ? "bg-green-400" : "bg-green-600 hover:bg-green-700"
+          }`}
         onClick={handleSearchStops}
       >
         {searching ? "Searching..." : "Search Stops"}

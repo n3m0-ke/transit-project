@@ -54,10 +54,10 @@ export default function SearchRoutes() {
             const lon = parseFloat(s.stop_lon);
             return lat && lon
               ? {
-                  ...s,
-                  stop_lat: lat,
-                  stop_lon: lon,
-                }
+                ...s,
+                stop_lat: lat,
+                stop_lon: lon,
+              }
               : null;
           })
           .filter((s) => s !== null);
